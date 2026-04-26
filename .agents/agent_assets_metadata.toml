@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "R2Ti-yb6Kss4rW0Kd63OL"
+uri = "file://artifacts/book-stacker/public/hero-bg.png"
+type = "image"
+title = "Cozy library with warm lamplight"

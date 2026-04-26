@@ -25,3 +25,17 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+
+## Artifacts
+
+### book-stacker (web)
+Cozy library-themed 2D drag-and-drop puzzle game. Frontend-only (React + Vite, wouter routing, framer-motion animations, lucide-react icons, localStorage progress).
+
+- 12 progressive levels in `src/game/levels.ts` (tutorial → multi-shelf → blocked cells → fragile/heavy/rotatable → time/move limits)
+- Game logic & placement validation in `src/game/gameLogic.ts`
+- Components: `Book`, `Shelf`, `BookTray`, `HUD`, `CompleteOverlay`
+- Pages: `Title`, `LevelSelect`, `Game`, `HowToPlay`, `Settings`
+- Game state managed via `useReducer` in `pages/Game.tsx`
+- Progress + settings persisted via `src/lib/storage.ts` under key `book-stacker-progress-v1`
+- Theme: warm mahogany / amber / oxblood, dark mode default, both modes supported
+- Keyboard: `R` rotate, `Esc` restart, `Ctrl/⌘+Z` or `U` undo
