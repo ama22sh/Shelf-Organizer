@@ -14,7 +14,9 @@ import { BookTray } from "@/components/BookTray";
 import { HUD } from "@/components/HUD";
 import { CompleteOverlay } from "@/components/CompleteOverlay";
 import { AmbientDust } from "@/components/AmbientDust";
+import { CozyRoom } from "@/components/CozyRoom";
 import { Book } from "@/components/Book";
+import { getBookDims } from "@/game/gameLogic";
 import { recordLevelResult, loadProgress } from "@/lib/storage";
 import { audio } from "@/lib/audio";
 import { Button } from "@/components/ui/button";
@@ -386,18 +388,40 @@ export default function Game({ levelId }: { levelId: string }) {
     setPointerPos({ x: e.clientX, y: e.clientY });
   };
 
-  const tryPlaceFromPointer = (clientX: number, clientY: number) => {
-    if (!level) return false;
-    const elements = document.elementsFromPoint(clientX, clientY);
+  // The ghost is centered on the cursor with translate(-50%,-50%).
+  // To find the cell that the ghost's TOP-LEFT corner sits over, we
+  // probe at cursor - ((W-1)/2, (H-1)/2) in pixels. This yields the
+  // top-left cell index directly via elementsFromPoint.
+  const probeTopLeftCell = (clientX: number, clientY: number) => {
+    if (!heldBook) return null;
+    const { w, h } = getBookDims(heldBook, state.heldRotated);
+    const px = clientX - ((w - 1) * cellSize) / 2;
+    const py = clientY - ((h - 1) * cellSize) / 2;
+    const elements = document.elementsFromPoint(px, py);
     const cell = elements.find(
       (el) => el instanceof HTMLElement && el.dataset.cell === "1",
     ) as HTMLElement | undefined;
-    if (!cell) return false;
-    const shelfId = cell.dataset.shelfId!;
-    const x = parseInt(cell.dataset.cx!, 10);
-    const y = parseInt(cell.dataset.cy!, 10);
+    if (!cell) return null;
+    return {
+      shelfId: cell.dataset.shelfId!,
+      x: parseInt(cell.dataset.cx!, 10),
+      y: parseInt(cell.dataset.cy!, 10),
+    };
+  };
+
+  const tryPlaceFromPointer = (clientX: number, clientY: number) => {
+    if (!level) return false;
+    const target = probeTopLeftCell(clientX, clientY);
+    if (!target) return false;
     const result = { value: "invalid" as PlaceResult };
-    dispatch({ type: "place", shelfId, x, y, level, result });
+    dispatch({
+      type: "place",
+      shelfId: target.shelfId,
+      x: target.x,
+      y: target.y,
+      level,
+      result,
+    });
     if (result.value === "ok") {
       audio.place();
       return true;
@@ -416,21 +440,12 @@ export default function Game({ levelId }: { levelId: string }) {
     if (!dragging) return;
     const onMove = (e: PointerEvent) => {
       setPointerPos({ x: e.clientX, y: e.clientY });
-      // Update hover cell from cursor position
+      // Update hover cell using the same offset-aware probe so the
+      // ghost preview on the shelf matches where the floating book
+      // will actually land on release.
       if (level && heldBook) {
-        const elements = document.elementsFromPoint(e.clientX, e.clientY);
-        const cell = elements.find(
-          (el) => el instanceof HTMLElement && el.dataset.cell === "1",
-        ) as HTMLElement | undefined;
-        if (cell) {
-          setHoverCell({
-            shelfId: cell.dataset.shelfId!,
-            x: parseInt(cell.dataset.cx!, 10),
-            y: parseInt(cell.dataset.cy!, 10),
-          });
-        } else {
-          setHoverCell(null);
-        }
+        const target = probeTopLeftCell(e.clientX, e.clientY);
+        setHoverCell(target);
       }
     };
     const onUp = (e: PointerEvent) => {
@@ -478,6 +493,7 @@ export default function Game({ levelId }: { levelId: string }) {
 
   return (
     <div className="min-h-screen flex flex-col relative">
+      <CozyRoom />
       <AmbientDust />
 
       <div className="relative z-10 flex flex-col flex-1">

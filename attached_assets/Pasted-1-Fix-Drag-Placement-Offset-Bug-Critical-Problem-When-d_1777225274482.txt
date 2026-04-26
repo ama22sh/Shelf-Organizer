@@ -1,0 +1,105 @@
+1. Fix Drag Placement Offset Bug (Critical)
+
+Problem:
+When dragging a book, it does not align correctly with the grid. The book appears offset (missing or exceeding one block), forcing the player to move an extra step to correct placement.
+
+Required Fix:
+
+Ensure grid-based snapping is mathematically accurate.
+Convert mouse/world position to grid coordinates using proper rounding.
+
+Implementation Requirements:
+
+Use consistent conversion:
+World → Grid → Snapped World Position
+Snap using:
+Mathf.Round() (NOT floor unless intentional)
+Align pivot:
+Book prefab pivot must be centered OR bottom-left consistently
+Apply offset correction based on:
+Book size (multi-tile objects)
+Grid cell size
+
+Expected Result:
+
+Book follows cursor precisely
+No 1-block offset
+Placement matches preview exactly
+🎯 2. Improve Placement System
+Add ghost preview (transparent book):
+Green = valid placement
+Red = invalid placement
+Preview must:
+Snap exactly like final placement (same logic)
+Add soft snapping:
+Smooth interpolation instead of hard jumps
+🛋️ 3. Full Cozy Room Environment (Visual Upgrade)
+
+Transform background into a complete cozy room scene instead of a plain backdrop.
+
+Add Environment Elements:
+
+Sofa / couch
+Wooden table
+Bookshelves (decorative)
+Window with soft light
+Curtains
+Indoor plants
+Lamp with warm glow
+
+Lighting:
+
+Use warm yellow/orange lighting
+Add soft shadows
+Slight vignette or post-processing
+
+Ambient Effects:
+
+Floating dust particles
+Subtle light flicker
+Very slight camera movement (“breathing effect”)
+
+Goal:
+Make the game feel like a relaxing reading room, not just a puzzle grid.
+
+🔊 4. Complete Sound System (Missing Features Fix)
+
+Add and integrate all required sound effects:
+
+Sound Effects:
+
+Book grab → soft pickup sound
+Book place (valid) → gentle “thump”
+Invalid placement → soft error sound
+Win → satisfying chime / success tone
+Lose → soft, calm failure tone
+
+Implementation:
+
+Use Unity AudioSource system
+Separate channels:
+SFX
+Background Music
+Add slight pitch variation for repetition
+🎵 5. Background Music (Currently Missing)
+
+Add:
+
+Calm lo-fi / ambient loop music
+
+Requirements:
+
+Loop seamlessly
+Low volume (not distracting)
+Plays continuously during gameplay
+Optional fade-in at level start
+✨ 6. Animations & Feedback Polish
+Add smooth animations:
+Book pickup (slight scale-up)
+Placement (ease + small bounce)
+Add visual feedback:
+Glow on correct placement
+Win:
+Subtle camera zoom or shelf glow
+Lose:
+Screen dim or fade effect
