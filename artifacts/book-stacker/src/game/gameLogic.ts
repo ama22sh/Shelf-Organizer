@@ -57,6 +57,38 @@ export function isLevelWon(level: Level, placed: PlacedBook[]): boolean {
   return placed.length === level.books.length;
 }
 
+/**
+ * Returns true if any pending book can be placed somewhere on any shelf
+ * given the current placement. Considers rotations for rotatable books and
+ * the fragile-must-rest-on-floor rule. Heavy/fragile stacking interactions
+ * are intentionally NOT checked here — they require future state, so the
+ * geometry-only check is the safe game-over condition.
+ */
+export function anyBookFits(
+  level: Level,
+  placed: PlacedBook[],
+  pending: BookData[],
+): boolean {
+  for (const book of pending) {
+    const rotations = book.rotatable ? [false, true] : [false];
+    for (const rotated of rotations) {
+      for (const shelf of level.shelves) {
+        const { w, h } = getBookDims(book, rotated);
+        if (w > shelf.width || h > shelf.height) continue;
+        for (let y = 0; y <= shelf.height - h; y++) {
+          for (let x = 0; x <= shelf.width - w; x++) {
+            if (book.fragile && y + h !== shelf.height) continue;
+            if (canPlace(shelf, placed, book, rotated, x, y)) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
 export function computeStars(
   level: Level,
   moves: number,

@@ -3,12 +3,20 @@ import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { levels } from "@/game/levels";
 import type { BookData, Level, PlacedBook } from "@/game/types";
-import { canPlace, computeStars, isLevelWon } from "@/game/gameLogic";
+import {
+  anyBookFits,
+  canPlace,
+  computeStars,
+  isLevelWon,
+} from "@/game/gameLogic";
 import { Shelf } from "@/components/Shelf";
 import { BookTray } from "@/components/BookTray";
 import { HUD } from "@/components/HUD";
 import { CompleteOverlay } from "@/components/CompleteOverlay";
-import { recordLevelResult } from "@/lib/storage";
+import { AmbientDust } from "@/components/AmbientDust";
+import { Book } from "@/components/Book";
+import { recordLevelResult, loadProgress } from "@/lib/storage";
+import { audio } from "@/lib/audio";
 import { Button } from "@/components/ui/button";
 
 type State = {
@@ -22,14 +30,18 @@ type State = {
   history: PlacedBook[][];
   startedAt: number;
   finishedAt?: number;
+  lastPlacedId?: string | null;
 };
+
+type PlaceResult = "ok" | "invalid";
 
 type Action =
   | { type: "init"; level: Level }
   | { type: "pickUp"; bookId: string }
   | { type: "lift"; bookId: string }
   | { type: "rotate" }
-  | { type: "place"; shelfId: string; x: number; y: number; level: Level }
+  | { type: "place"; shelfId: string; x: number; y: number; level: Level; result?: { value: PlaceResult } }
+  | { type: "drop" }
   | { type: "undo" }
   | { type: "tick"; now: number; level: Level }
   | { type: "fail"; reason: string };
@@ -44,6 +56,7 @@ function init(level: Level): State {
     status: "playing",
     history: [],
     startedAt: Date.now(),
+    lastPlacedId: null,
   };
 }
 
@@ -81,33 +94,40 @@ function reducer(state: State, action: Action): State {
       return { ...state, heldRotated: !state.heldRotated };
     }
 
+    case "drop":
+      return { ...state, heldId: null, heldRotated: false };
+
     case "place": {
-      if (!state.heldId) return state;
-      const book = state.pending.find((b) => b.id === state.heldId);
-      if (!book) return state;
-      const shelf = action.level.shelves.find((s) => s.id === action.shelfId);
-      if (!shelf) return state;
-      if (
-        !canPlace(
-          shelf,
-          state.placed,
-          book,
-          state.heldRotated,
-          action.x,
-          action.y,
-        )
-      ) {
+      if (!state.heldId) {
+        if (action.result) action.result.value = "invalid";
         return state;
       }
-      // Fragile: must be on bottom row of shelf (no books beneath needed; just bottom)
-      const rotated = state.heldRotated;
-      const h = rotated ? book.width : book.height;
-      if (book.fragile) {
-        if (action.y + h !== shelf.height) return state;
+      const book = state.pending.find((b) => b.id === state.heldId);
+      if (!book) {
+        if (action.result) action.result.value = "invalid";
+        return state;
       }
-      // Heavy: cannot rest on top of fragile book
+      const shelf = action.level.shelves.find((s) => s.id === action.shelfId);
+      if (!shelf) {
+        if (action.result) action.result.value = "invalid";
+        return state;
+      }
+      const rotated = state.heldRotated;
+      if (
+        !canPlace(shelf, state.placed, book, rotated, action.x, action.y)
+      ) {
+        if (action.result) action.result.value = "invalid";
+        return state;
+      }
+      const h = rotated ? book.width : book.height;
+      const w = rotated ? book.height : book.width;
+      // Fragile: must rest on the bottom row
+      if (book.fragile && action.y + h !== shelf.height) {
+        if (action.result) action.result.value = "invalid";
+        return state;
+      }
+      // Heavy: cannot rest directly on top of a fragile book
       if (book.heavy) {
-        const w = rotated ? book.height : book.width;
         for (let dx = 0; dx < w; dx++) {
           const cx = action.x + dx;
           const belowY = action.y + h;
@@ -120,7 +140,10 @@ function reducer(state: State, action: Action): State {
               belowY >= p.y &&
               belowY < p.y + (p.rotated ? p.book.width : p.book.height),
           );
-          if (supporting?.book.fragile) return state;
+          if (supporting?.book.fragile) {
+            if (action.result) action.result.value = "invalid";
+            return state;
+          }
         }
       }
 
@@ -136,6 +159,7 @@ function reducer(state: State, action: Action): State {
       ];
       const newPending = state.pending.filter((b) => b.id !== book.id);
       const won = newPending.length === 0 && isLevelWon(action.level, newPlaced);
+      if (action.result) action.result.value = "ok";
       return {
         ...state,
         placed: newPlaced,
@@ -146,14 +170,13 @@ function reducer(state: State, action: Action): State {
         history: [...state.history, state.placed],
         status: won ? "won" : "playing",
         finishedAt: won ? Date.now() : state.finishedAt,
+        lastPlacedId: book.id,
       };
     }
 
     case "undo": {
       if (state.status !== "playing" || state.history.length === 0) return state;
       const prev = state.history[state.history.length - 1];
-      // Determine which book was added by diff
-      const lastIds = new Set(state.placed.map((p) => p.book.id));
       const prevIds = new Set(prev.map((p) => p.book.id));
       const addedBook = state.placed.find((p) => !prevIds.has(p.book.id));
       if (!addedBook) {
@@ -171,7 +194,6 @@ function reducer(state: State, action: Action): State {
         heldId: null,
         heldRotated: false,
       };
-      void lastIds;
     }
 
     case "tick": {
@@ -179,24 +201,43 @@ function reducer(state: State, action: Action): State {
       const elapsed = (action.now - state.startedAt) / 1000;
       const limit = action.level.constraints?.timeLimit;
       if (limit && elapsed >= limit) {
-        return { ...state, status: "lost", reason: "Time ran out.", finishedAt: action.now };
+        return {
+          ...state,
+          status: "lost",
+          reason: "Time ran out.",
+          finishedAt: action.now,
+        };
       }
       const moveLimit = action.level.constraints?.moveLimit;
       if (moveLimit && state.moves >= moveLimit && state.pending.length > 0) {
-        return { ...state, status: "lost", reason: "No moves left.", finishedAt: action.now };
+        return {
+          ...state,
+          status: "lost",
+          reason: "No moves left.",
+          finishedAt: action.now,
+        };
       }
       return state;
     }
 
     case "fail":
-      return { ...state, status: "lost", reason: action.reason, finishedAt: Date.now() };
+      return {
+        ...state,
+        status: "lost",
+        reason: action.reason,
+        finishedAt: Date.now(),
+      };
 
     default:
       return state;
   }
 }
 
-function useElapsed(startedAt: number, finishedAt: number | undefined, status: string) {
+function useElapsed(
+  startedAt: number,
+  finishedAt: number | undefined,
+  status: string,
+) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (status !== "playing") return;
@@ -210,26 +251,57 @@ export default function Game({ levelId }: { levelId: string }) {
   const id = parseInt(levelId, 10);
   const level = levels.find((l) => l.id === id);
   const [, setLocation] = useLocation();
+  void setLocation;
   const [state, dispatch] = useReducer(reducer, level ?? levels[0], init);
   const [cellSize, setCellSize] = useState(48);
   const containerRef = useRef<HTMLDivElement>(null);
   const recordedRef = useRef(false);
+  const lastFailRef = useRef(0);
+
+  // Drag state
+  const [dragging, setDragging] = useState(false);
+  const [pointerPos, setPointerPos] = useState<{ x: number; y: number } | null>(null);
+  const [hoverCell, setHoverCell] = useState<{ shelfId: string; x: number; y: number } | null>(null);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const isDragRef = useRef(false);
 
   // Reset on level change
   useEffect(() => {
     if (level) {
       recordedRef.current = false;
       dispatch({ type: "init", level });
+      setHoverCell(null);
+      setDragging(false);
+      setPointerPos(null);
     }
   }, [id, level]);
 
-  // Responsive cell size — fit shelves to container width
+  // Apply audio enabled from saved settings, and start music
+  useEffect(() => {
+    const { settings } = loadProgress();
+    audio.setEnabled(settings.sound);
+    if (!settings.sound) return;
+    // Music starts on first user gesture only (browser policy).
+    const start = () => {
+      audio.startMusic();
+      window.removeEventListener("pointerdown", start);
+      window.removeEventListener("keydown", start);
+    };
+    window.addEventListener("pointerdown", start, { once: true });
+    window.addEventListener("keydown", start, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", start);
+      window.removeEventListener("keydown", start);
+    };
+  }, []);
+
+  // Responsive cell size
   useEffect(() => {
     const calc = () => {
       if (!level) return;
       const maxW = containerRef.current?.clientWidth ?? 600;
       const widest = Math.max(...level.shelves.map((s) => s.width));
-      const target = Math.floor((maxW - 40) / widest);
+      const target = Math.floor((maxW - 60) / widest);
       setCellSize(Math.max(28, Math.min(64, target)));
     };
     calc();
@@ -248,13 +320,24 @@ export default function Game({ levelId }: { levelId: string }) {
     return () => clearInterval(t);
   }, [level, state.status]);
 
+  // Game-over: no remaining book fits anywhere
+  useEffect(() => {
+    if (!level || state.status !== "playing") return;
+    if (state.pending.length === 0) return;
+    if (!anyBookFits(level, state.placed, state.pending)) {
+      audio.lose();
+      dispatch({ type: "fail", reason: "No remaining space fits any book." });
+    }
+  }, [level, state.status, state.placed, state.pending]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!level) return;
       if (e.key === "r" || e.key === "R") {
         dispatch({ type: "rotate" });
       } else if (e.key === "Escape") {
-        dispatch({ type: "init", level: level! });
+        dispatch({ type: "init", level });
       } else if ((e.key === "z" && (e.ctrlKey || e.metaKey)) || e.key === "u") {
         e.preventDefault();
         dispatch({ type: "undo" });
@@ -269,6 +352,7 @@ export default function Game({ levelId }: { levelId: string }) {
     if (state.status === "won" && level && !recordedRef.current) {
       recordedRef.current = true;
       const stars = computeStars(level, state.moves, elapsed);
+      audio.win();
       recordLevelResult(
         level.id,
         {
@@ -287,6 +371,96 @@ export default function Game({ levelId }: { levelId: string }) {
     return state.pending.find((b) => b.id === state.heldId) ?? null;
   }, [state.heldId, state.pending]);
 
+  // Pointer-driven drag from tray or placed book
+  const startDrag = (bookId: string, e: React.PointerEvent, fromTray: boolean) => {
+    if (state.status !== "playing") return;
+    if (fromTray) {
+      dispatch({ type: "pickUp", bookId });
+    } else {
+      dispatch({ type: "lift", bookId });
+    }
+    audio.pick();
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    isDragRef.current = true;
+    setDragging(true);
+    setPointerPos({ x: e.clientX, y: e.clientY });
+  };
+
+  const tryPlaceFromPointer = (clientX: number, clientY: number) => {
+    if (!level) return false;
+    const elements = document.elementsFromPoint(clientX, clientY);
+    const cell = elements.find(
+      (el) => el instanceof HTMLElement && el.dataset.cell === "1",
+    ) as HTMLElement | undefined;
+    if (!cell) return false;
+    const shelfId = cell.dataset.shelfId!;
+    const x = parseInt(cell.dataset.cx!, 10);
+    const y = parseInt(cell.dataset.cy!, 10);
+    const result = { value: "invalid" as PlaceResult };
+    dispatch({ type: "place", shelfId, x, y, level, result });
+    if (result.value === "ok") {
+      audio.place();
+      return true;
+    } else {
+      const now = Date.now();
+      if (now - lastFailRef.current > 200) {
+        audio.invalid();
+        lastFailRef.current = now;
+      }
+      return false;
+    }
+  };
+
+  // Global pointer handlers while dragging
+  useEffect(() => {
+    if (!dragging) return;
+    const onMove = (e: PointerEvent) => {
+      setPointerPos({ x: e.clientX, y: e.clientY });
+      // Update hover cell from cursor position
+      if (level && heldBook) {
+        const elements = document.elementsFromPoint(e.clientX, e.clientY);
+        const cell = elements.find(
+          (el) => el instanceof HTMLElement && el.dataset.cell === "1",
+        ) as HTMLElement | undefined;
+        if (cell) {
+          setHoverCell({
+            shelfId: cell.dataset.shelfId!,
+            x: parseInt(cell.dataset.cx!, 10),
+            y: parseInt(cell.dataset.cy!, 10),
+          });
+        } else {
+          setHoverCell(null);
+        }
+      }
+    };
+    const onUp = (e: PointerEvent) => {
+      const start = dragStartRef.current;
+      const moved =
+        start &&
+        Math.hypot(e.clientX - start.x, e.clientY - start.y) > 6;
+      isDragRef.current = false;
+      setDragging(false);
+      setPointerPos(null);
+      if (moved) {
+        // Drag release: try to place; if not, drop (deselect).
+        const placed = tryPlaceFromPointer(e.clientX, e.clientY);
+        if (!placed) {
+          dispatch({ type: "drop" });
+          setHoverCell(null);
+        }
+      }
+      // If it was a tap (no movement), keep book held → click-to-place mode.
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, [dragging, level, heldBook]);
+
   if (!level) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4">
@@ -303,74 +477,121 @@ export default function Game({ levelId }: { levelId: string }) {
   const nextLevel = levels.find((l) => l.id === level.id + 1);
 
   return (
-    <div
-      className="min-h-screen flex flex-col"
-      onClick={() => {
-        // Click outside shelves cancels held book
-        // (Shelf clicks stop propagation.)
-      }}
-    >
-      <HUD
-        levelId={level.id}
-        levelName={level.name}
-        moves={state.moves}
-        elapsed={elapsed}
-        timeLimit={level.constraints?.timeLimit}
-        moveLimit={level.constraints?.moveLimit}
-        canRotate={!!heldBook?.rotatable}
-        canUndo={state.history.length > 0 && state.status === "playing"}
-        onRotate={() => dispatch({ type: "rotate" })}
-        onUndo={() => dispatch({ type: "undo" })}
-        onRestart={() => dispatch({ type: "init", level })}
-      />
+    <div className="min-h-screen flex flex-col relative">
+      <AmbientDust />
 
-      <main
-        ref={containerRef}
-        className="flex-1 w-full max-w-5xl mx-auto px-3 py-4 sm:py-6 flex flex-col gap-6"
-      >
-        {/* Shelves */}
-        <div className="flex flex-col items-center gap-6">
-          {level.shelves.map((shelf, i) => (
-            <motion.div
-              key={shelf.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.08 }}
-            >
-              <Shelf
-                shelf={shelf}
-                placed={state.placed}
-                cellSize={cellSize}
-                heldBook={heldBook}
-                heldRotated={state.heldRotated}
-                onPlace={(shelfId, x, y) =>
-                  dispatch({ type: "place", shelfId, x, y, level })
-                }
-                onPickUp={(bookId) => dispatch({ type: "lift", bookId })}
-              />
-            </motion.div>
-          ))}
-        </div>
+      <div className="relative z-10 flex flex-col flex-1">
+        <HUD
+          levelId={level.id}
+          levelName={level.name}
+          moves={state.moves}
+          elapsed={elapsed}
+          timeLimit={level.constraints?.timeLimit}
+          moveLimit={level.constraints?.moveLimit}
+          canRotate={!!heldBook?.rotatable}
+          canUndo={state.history.length > 0 && state.status === "playing"}
+          onRotate={() => dispatch({ type: "rotate" })}
+          onUndo={() => dispatch({ type: "undo" })}
+          onRestart={() => dispatch({ type: "init", level })}
+        />
 
-        {/* Tray */}
-        <div className="mt-auto">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-sans mb-2 px-1">
-            Books to shelve
+        <main
+          ref={containerRef}
+          className="flex-1 w-full max-w-5xl mx-auto px-3 py-4 sm:py-6 flex flex-col gap-6 camera-breathe"
+          onClick={() => {
+            // Clicking empty space drops a held book (cancel).
+            if (state.heldId && !dragging) {
+              dispatch({ type: "drop" });
+              setHoverCell(null);
+            }
+          }}
+        >
+          {/* Shelves */}
+          <div className="flex flex-col items-center gap-8">
+            {level.shelves.map((shelf, i) => (
+              <motion.div
+                key={shelf.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.08 }}
+              >
+                <Shelf
+                  shelf={shelf}
+                  placed={state.placed}
+                  cellSize={cellSize}
+                  heldBook={heldBook}
+                  heldRotated={state.heldRotated}
+                  hoverCell={hoverCell}
+                  justPlacedId={state.lastPlacedId ?? null}
+                  onCellEnter={(shelfId, x, y) =>
+                    setHoverCell({ shelfId, x, y })
+                  }
+                  onCellLeave={() => {
+                    if (!dragging) setHoverCell(null);
+                  }}
+                  onPlace={(shelfId, x, y) => {
+                    const result = { value: "invalid" as PlaceResult };
+                    dispatch({
+                      type: "place",
+                      shelfId,
+                      x,
+                      y,
+                      level,
+                      result,
+                    });
+                    if (result.value === "ok") {
+                      audio.place();
+                      setHoverCell(null);
+                    } else {
+                      audio.invalid();
+                    }
+                  }}
+                  onPickUpPlaced={(bookId, e) => startDrag(bookId, e, false)}
+                />
+              </motion.div>
+            ))}
           </div>
-          <BookTray
-            books={state.pending}
-            heldBookId={state.heldId}
-            onPickUp={(id) => dispatch({ type: "pickUp", bookId: id })}
+
+          {/* Tray */}
+          <div className="mt-auto">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground font-sans mb-2 px-1">
+              Books to shelve · {state.pending.length}
+            </div>
+            <BookTray
+              books={state.pending}
+              heldBookId={state.heldId}
+              onBookPointerDown={(bid, e) => startDrag(bid, e, true)}
+              cellSize={cellSize}
+            />
+            {heldBook && (
+              <div className="text-xs text-muted-foreground italic font-serif mt-2 text-center">
+                Holding "{heldBook.title}" — drag to a shelf, or click a cell
+                {heldBook.rotatable ? " · press R to rotate" : ""}
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+
+      {/* Floating drag ghost */}
+      {dragging && heldBook && pointerPos && (
+        <div
+          className="fixed pointer-events-none z-50"
+          style={{
+            left: pointerPos.x,
+            top: pointerPos.y,
+            transform: "translate(-50%, -50%)",
+            opacity: 0.92,
+            filter: "drop-shadow(0 8px 16px rgba(0,0,0,.6))",
+          }}
+        >
+          <Book
+            book={heldBook}
+            rotated={state.heldRotated}
             cellSize={cellSize}
           />
-          {heldBook && (
-            <div className="text-xs text-muted-foreground italic font-serif mt-2 text-center">
-              Holding "{heldBook.title}" — click a shelf cell to place
-              {heldBook.rotatable ? " · press R to rotate" : ""}
-            </div>
-          )}
         </div>
-      </main>
+      )}
 
       {state.status !== "playing" && (
         <CompleteOverlay

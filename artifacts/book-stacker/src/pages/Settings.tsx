@@ -4,6 +4,7 @@ import { ArrowLeft, Sun, Moon, Volume2, VolumeX, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { loadProgress, resetProgress, updateSettings } from "@/lib/storage";
+import { audio } from "@/lib/audio";
 
 export default function Settings() {
   const [state, setState] = useState(() => loadProgress());
@@ -20,7 +21,10 @@ export default function Settings() {
   };
 
   const toggleSound = () => {
-    setState(updateSettings({ sound: !state.settings.sound }));
+    const next = !state.settings.sound;
+    setState(updateSettings({ sound: next }));
+    audio.setEnabled(next);
+    if (next) audio.perfect();
   };
 
   const reset = () => {

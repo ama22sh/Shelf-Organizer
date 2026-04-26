@@ -4,17 +4,36 @@ import { Book } from "./Book";
 type Props = {
   books: BookData[];
   heldBookId: string | null;
-  onPickUp: (id: string) => void;
+  onBookPointerDown: (id: string, e: React.PointerEvent) => void;
   cellSize: number;
 };
 
-export function BookTray({ books, heldBookId, onPickUp, cellSize }: Props) {
+export function BookTray({
+  books,
+  heldBookId,
+  onBookPointerDown,
+  cellSize,
+}: Props) {
+  // Slightly smaller in the tray so a wide book doesn't overflow visually.
+  const traySize = Math.max(24, Math.round(cellSize * 0.85));
+
   return (
     <div className="relative w-full" data-testid="book-tray">
-      <div className="absolute inset-0 wood-grain rounded-md" />
-      <div className="relative p-3 sm:p-4 flex flex-wrap items-end gap-3 min-h-[100px]">
+      <div
+        className="absolute inset-0 wood-grain"
+        style={{
+          borderRadius: 8,
+          boxShadow:
+            "0 8px 20px rgba(0,0,0,.4), inset 0 0 0 1px rgba(0,0,0,.3), inset 0 0 0 2px hsl(35 50% 28%)",
+        }}
+      />
+      <div
+        className="absolute left-2 right-2 top-1 wood-grain"
+        style={{ height: 4, borderRadius: 2, opacity: 0.7 }}
+      />
+      <div className="relative p-3 sm:p-4 pt-5 flex flex-wrap items-end gap-3 min-h-[110px]">
         {books.length === 0 && (
-          <div className="text-amber-100/70 italic font-serif text-sm w-full text-center py-4">
+          <div className="text-amber-100/80 italic font-serif text-sm w-full text-center py-6">
             All books shelved.
           </div>
         )}
@@ -22,11 +41,12 @@ export function BookTray({ books, heldBookId, onPickUp, cellSize }: Props) {
           <Book
             key={book.id}
             book={book}
-            cellSize={cellSize}
+            cellSize={traySize}
+            tilt
             selected={book.id === heldBookId}
-            onClick={(e) => {
+            onPointerDown={(e) => {
               e.stopPropagation();
-              onPickUp(book.id);
+              onBookPointerDown(book.id, e);
             }}
           />
         ))}

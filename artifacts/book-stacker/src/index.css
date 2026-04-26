@@ -314,14 +314,53 @@
   .book-spine {
     box-shadow:
       inset 0 0 0 1px rgba(0,0,0,.30),
-      inset 2px 0 0 rgba(255,255,255,.10),
-      inset -2px 0 0 rgba(0,0,0,.20),
-      0 2px 4px rgba(0,0,0,.30);
+      inset 2px 0 0 rgba(255,255,255,.12),
+      inset -2px 0 0 rgba(0,0,0,.25),
+      0 3px 6px rgba(0,0,0,.45),
+      0 1px 2px rgba(0,0,0,.35);
   }
-  .book-spine-gold-edge::before {
-    content: ""; position: absolute; inset: 0;
-    border-top: 1px solid hsl(35 70% 55% / 0.5);
-    border-bottom: 1px solid hsl(35 70% 55% / 0.5);
-    pointer-events: none; border-radius: inherit;
+
+  @keyframes book-pop {
+    0%   { transform: scale(0.6); filter: brightness(2); }
+    50%  { transform: scale(1.08); filter: brightness(1.4); }
+    100% { transform: scale(1); filter: brightness(1); }
+  }
+  .book-pop {
+    animation: book-pop 380ms cubic-bezier(.34,1.56,.64,1) both;
+  }
+
+  .book-glow {
+    box-shadow:
+      0 0 0 4px hsl(38 75% 55% / 0.55),
+      0 0 24px 6px hsl(38 75% 55% / 0.4),
+      inset 0 0 0 1px rgba(0,0,0,.30),
+      inset 2px 0 0 rgba(255,255,255,.12),
+      inset -2px 0 0 rgba(0,0,0,.25),
+      0 3px 6px rgba(0,0,0,.45) !important;
+  }
+
+  /* Floating dust motes */
+  @keyframes dust-drift {
+    0%   { transform: translate(0, 0); opacity: 0; }
+    10%  { opacity: var(--mote-opacity, .35); }
+    50%  { transform: translate(calc(var(--drift, 0px) * .6), -40vh); opacity: var(--mote-opacity, .35); }
+    90%  { opacity: var(--mote-opacity, .35); }
+    100% { transform: translate(var(--drift, 0px), -90vh); opacity: 0; }
+  }
+  .dust-mote {
+    animation-name: dust-drift;
+    animation-iteration-count: infinite;
+    animation-timing-function: linear;
+    will-change: transform, opacity;
+  }
+
+  /* Subtle camera breathing — gentle scale on the play area */
+  @keyframes camera-breathe {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.006); }
+  }
+  .camera-breathe {
+    animation: camera-breathe 9s ease-in-out infinite;
+    transform-origin: center center;
   }
 }

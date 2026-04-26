@@ -1,7 +1,8 @@
-import { useState } from "react";
 import type { BookData, PlacedBook, ShelfData } from "@/game/types";
 import { canPlace, getBookDims, isCellBlocked } from "@/game/gameLogic";
 import { Book } from "./Book";
+
+type HoverCell = { shelfId: string; x: number; y: number } | null;
 
 type Props = {
   shelf: ShelfData;
@@ -9,8 +10,12 @@ type Props = {
   cellSize: number;
   heldBook: BookData | null;
   heldRotated: boolean;
+  hoverCell: HoverCell;
+  justPlacedId?: string | null;
+  onCellEnter: (shelfId: string, x: number, y: number) => void;
+  onCellLeave: () => void;
   onPlace: (shelfId: string, x: number, y: number) => void;
-  onPickUp: (bookId: string) => void;
+  onPickUpPlaced: (bookId: string, e: React.PointerEvent) => void;
 };
 
 export function Shelf({
@@ -19,13 +24,19 @@ export function Shelf({
   cellSize,
   heldBook,
   heldRotated,
+  hoverCell,
+  justPlacedId,
+  onCellEnter,
+  onCellLeave,
   onPlace,
-  onPickUp,
+  onPickUpPlaced,
 }: Props) {
-  const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
-
   const onShelf = placed.filter((p) => p.shelfId === shelf.id);
-  const woodTrim = 10;
+  const woodTrim = 14;
+  const hover =
+    hoverCell && hoverCell.shelfId === shelf.id
+      ? { x: hoverCell.x, y: hoverCell.y }
+      : null;
 
   const hoverValid =
     hover && heldBook
@@ -33,15 +44,41 @@ export function Shelf({
       : false;
 
   return (
-    <div
-      className="relative inline-block"
-      style={{ padding: woodTrim }}
-    >
-      {/* Wood frame */}
+    <div className="relative inline-block" style={{ padding: woodTrim }}>
+      {/* Cupboard frame — outer wood */}
       <div
-        className="absolute inset-0 wood-grain rounded-sm"
-        style={{ borderRadius: 6 }}
+        className="absolute inset-0 wood-grain"
+        style={{
+          borderRadius: 8,
+          boxShadow:
+            "0 12px 32px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.3), inset 0 0 0 2px hsl(35 50% 28%)",
+        }}
       />
+      {/* Top crown lip (a thin wood band on top) */}
+      <div
+        className="absolute wood-grain"
+        style={{
+          left: 4,
+          right: 4,
+          top: 4,
+          height: 6,
+          borderRadius: "4px 4px 0 0",
+          opacity: 0.85,
+        }}
+      />
+      {/* Bottom base lip (heavier) */}
+      <div
+        className="absolute wood-grain"
+        style={{
+          left: 0,
+          right: 0,
+          bottom: -3,
+          height: 10,
+          borderRadius: "0 0 8px 8px",
+          boxShadow: "0 6px 12px rgba(0,0,0,.5)",
+        }}
+      />
+
       {/* Shelf interior — back panel */}
       <div
         className="relative"
@@ -49,12 +86,28 @@ export function Shelf({
           width: shelf.width * cellSize,
           height: shelf.height * cellSize,
           background:
-            "linear-gradient(180deg, hsl(25 40% 20% / 0.95), hsl(20 35% 14% / 0.95))",
+            "linear-gradient(180deg, hsl(25 40% 18% / 0.97), hsl(20 35% 11% / 0.97))",
           boxShadow:
-            "inset 0 4px 8px rgba(0,0,0,.5), inset 0 -2px 4px rgba(0,0,0,.4)",
-          borderRadius: 2,
+            "inset 0 6px 14px rgba(0,0,0,.65), inset 0 -3px 6px rgba(0,0,0,.5)",
+          borderRadius: 3,
         }}
       >
+        {/* Horizontal shelf dividers (wood planks) */}
+        {Array.from({ length: shelf.height - 1 }).map((_, i) => (
+          <div
+            key={`div-${i}`}
+            className="absolute left-0 right-0 wood-grain pointer-events-none"
+            style={{
+              top: (i + 1) * cellSize - 2,
+              height: 4,
+              borderRadius: 1,
+              boxShadow: "0 2px 3px rgba(0,0,0,.5)",
+              zIndex: 5,
+              opacity: 0.95,
+            }}
+          />
+        ))}
+
         {/* Cell grid */}
         {Array.from({ length: shelf.height }).map((_, y) =>
           Array.from({ length: shelf.width }).map((_, x) => {
@@ -75,6 +128,10 @@ export function Shelf({
               <div
                 key={`${x}-${y}`}
                 data-testid={`cell-${shelf.id}-${x}-${y}`}
+                data-cell="1"
+                data-shelf-id={shelf.id}
+                data-cx={x}
+                data-cy={y}
                 className="absolute"
                 style={{
                   left: x * cellSize,
@@ -82,27 +139,25 @@ export function Shelf({
                   width: cellSize,
                   height: cellSize,
                   borderRight:
-                    x < shelf.width - 1 ? "1px dashed rgba(255,255,255,.04)" : undefined,
-                  borderBottom:
-                    y < shelf.height - 1
-                      ? "1px dashed rgba(255,255,255,.04)"
+                    x < shelf.width - 1
+                      ? "1px dashed rgba(255,255,255,.05)"
                       : undefined,
                   background: blocked
                     ? "repeating-linear-gradient(45deg, hsl(20 25% 8%), hsl(20 25% 8%) 4px, hsl(20 25% 12%) 4px, hsl(20 25% 12%) 8px)"
                     : isHover
                     ? hoverValid
-                      ? "hsl(140 50% 40% / 0.30)"
-                      : "hsl(0 60% 40% / 0.30)"
+                      ? "radial-gradient(hsl(140 55% 45% / 0.45), hsl(140 55% 30% / 0.25))"
+                      : "radial-gradient(hsl(0 65% 45% / 0.45), hsl(0 65% 30% / 0.25))"
                     : "transparent",
                   cursor: heldBook && !blocked ? "pointer" : "default",
+                  transition: "background-color 120ms ease",
                 }}
-                onMouseEnter={() => heldBook && !blocked && setHover({ x, y })}
-                onMouseLeave={() => setHover(null)}
+                onMouseEnter={() => heldBook && !blocked && onCellEnter(shelf.id, x, y)}
+                onMouseLeave={() => onCellLeave()}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!heldBook || blocked) return;
                   onPlace(shelf.id, x, y);
-                  setHover(null);
                 }}
               />
             );
@@ -120,9 +175,13 @@ export function Shelf({
               book={p.book}
               rotated={p.rotated}
               cellSize={cellSize}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!heldBook) onPickUp(p.book.id);
+              tilt
+              justPlaced={p.book.id === justPlacedId}
+              onPointerDown={(e) => {
+                if (!heldBook) {
+                  e.stopPropagation();
+                  onPickUpPlaced(p.book.id, e);
+                }
               }}
             />
           </div>
@@ -135,7 +194,6 @@ export function Shelf({
             style={{
               left: hover.x * cellSize,
               top: hover.y * cellSize,
-              opacity: 0.55,
             }}
           >
             <Book
@@ -148,17 +206,6 @@ export function Shelf({
           </div>
         )}
       </div>
-
-      {/* Bottom shelf board (lip) */}
-      <div
-        className="absolute left-0 right-0 wood-grain"
-        style={{
-          bottom: 0,
-          height: woodTrim,
-          borderRadius: "0 0 6px 6px",
-          boxShadow: "0 4px 8px rgba(0,0,0,.4)",
-        }}
-      />
     </div>
   );
 }
