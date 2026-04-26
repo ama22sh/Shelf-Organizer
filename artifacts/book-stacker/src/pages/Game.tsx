@@ -278,23 +278,12 @@ export default function Game({ levelId }: { levelId: string }) {
     }
   }, [id, level]);
 
-  // Apply audio enabled from saved settings, and start music
+  // Audio bootstrap is handled at the App level (works on any page).
+  // Here we only re-sync the current sound preference each time the
+  // game page mounts, in case the user toggled it elsewhere.
   useEffect(() => {
     const { settings } = loadProgress();
     audio.setEnabled(settings.sound);
-    if (!settings.sound) return;
-    // Music starts on first user gesture only (browser policy).
-    const start = () => {
-      audio.startMusic();
-      window.removeEventListener("pointerdown", start);
-      window.removeEventListener("keydown", start);
-    };
-    window.addEventListener("pointerdown", start, { once: true });
-    window.addEventListener("keydown", start, { once: true });
-    return () => {
-      window.removeEventListener("pointerdown", start);
-      window.removeEventListener("keydown", start);
-    };
   }, []);
 
   // Responsive cell size

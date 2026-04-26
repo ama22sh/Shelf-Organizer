@@ -10,6 +10,7 @@ import Game from "@/pages/Game";
 import HowToPlay from "@/pages/HowToPlay";
 import Settings from "@/pages/Settings";
 import { loadProgress } from "@/lib/storage";
+import { audio } from "@/lib/audio";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +33,27 @@ function App() {
   useEffect(() => {
     const { settings } = loadProgress();
     document.documentElement.classList.toggle("dark", settings.theme === "dark");
+    audio.setEnabled(settings.sound);
+
+    // Browsers block audio until the user has interacted with the page.
+    // Bootstrap music + the audio context on the very first interaction
+    // anywhere in the app — works regardless of which page the user lands on.
+    const boot = () => {
+      const { settings: s } = loadProgress();
+      audio.setEnabled(s.sound);
+      if (s.sound) audio.startMusic();
+      window.removeEventListener("pointerdown", boot);
+      window.removeEventListener("keydown", boot);
+      window.removeEventListener("touchstart", boot);
+    };
+    window.addEventListener("pointerdown", boot);
+    window.addEventListener("keydown", boot);
+    window.addEventListener("touchstart", boot);
+    return () => {
+      window.removeEventListener("pointerdown", boot);
+      window.removeEventListener("keydown", boot);
+      window.removeEventListener("touchstart", boot);
+    };
   }, []);
 
   return (
