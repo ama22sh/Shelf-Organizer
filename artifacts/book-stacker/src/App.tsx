@@ -49,10 +49,37 @@ function App() {
     window.addEventListener("pointerdown", boot);
     window.addEventListener("keydown", boot);
     window.addEventListener("touchstart", boot);
+
+    // Global button-click sound. Fires on any <button>, link styled as
+    // a button, or shadcn switch/checkbox interactions.
+    let lastClickAt = 0;
+    const onPointerDownGlobal = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const interactive = target.closest(
+        'button, [role="button"], [role="switch"], [role="checkbox"], a[href]',
+      );
+      if (!interactive) return;
+      // Skip clicks that originate inside the gameplay area (books / cells)
+      // — those have their own dedicated sounds.
+      if (
+        target.closest('[data-cell="1"]') ||
+        target.closest("[data-book]")
+      ) {
+        return;
+      }
+      const now = Date.now();
+      if (now - lastClickAt < 60) return;
+      lastClickAt = now;
+      audio.click();
+    };
+    window.addEventListener("pointerdown", onPointerDownGlobal, true);
+
     return () => {
       window.removeEventListener("pointerdown", boot);
       window.removeEventListener("keydown", boot);
       window.removeEventListener("touchstart", boot);
+      window.removeEventListener("pointerdown", onPointerDownGlobal, true);
     };
   }, []);
 

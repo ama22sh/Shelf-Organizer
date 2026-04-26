@@ -7,14 +7,11 @@ const AudioCtor: Ctor | undefined =
 
 /**
  * Cozy library audio engine.
- *
  * - Pure Web Audio synthesis, no external assets.
- * - Music: a slow drone of stacked sine partials + a gentle pentatonic
- *   pluck melody on a slow random schedule. LFO swells the master gain
- *   so it "breathes" like a fireplace room.
- * - SFX: pickup, place (valid), invalid, perfect chime, win arpeggio,
- *   lose tone. Each call resumes the audio context if needed (browsers
- *   auto-suspend until first user gesture).
+ * - Music: drone of stacked sine partials + a slow random pentatonic
+ *   pluck melody, gentle reverb, LFO breathing.
+ * - SFX: pickup, place, invalid, click, perfect, win, lose. Win/lose
+ *   briefly duck the music bus so the cue is unmissable.
  */
 class AudioEngine {
   private ctx: AudioContext | null = null;
@@ -53,7 +50,7 @@ class AudioEngine {
         this.master.connect(this.ctx.destination);
 
         this.sfxGain = this.ctx.createGain();
-        this.sfxGain.gain.value = 0.9;
+        this.sfxGain.gain.value = 0.95;
         this.sfxGain.connect(this.master);
       } catch {
         return null;
@@ -89,7 +86,7 @@ class AudioEngine {
         now + opts.duration,
       );
     }
-    const peak = opts.peak ?? 0.22;
+    const peak = opts.peak ?? 0.18;
     const attack = opts.attack ?? 0.005;
     gain.gain.setValueAtTime(0, now);
     gain.gain.linearRampToValueAtTime(peak, now + attack);
@@ -99,50 +96,140 @@ class AudioEngine {
     osc.stop(now + opts.duration + 0.05);
   }
 
+  /** Briefly duck the music bus so a stinger can be heard clearly. */
+  private duckMusic(durationSec = 1.6) {
+    if (!this.ctx || !this.musicGain) return;
+    const t = this.ctx.currentTime;
+    const g = this.musicGain.gain;
+    const current = g.value;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(current, t);
+    g.linearRampToValueAtTime(current * 0.18, t + 0.08);
+    g.linearRampToValueAtTime(current, t + durationSec);
+  }
+
   /* -------- Sound effects -------- */
 
+  /** Soft UI click — used for buttons and toggles. */
+  click() {
+    // Very short, low-volume tick so it doesn't get tiring.
+    this.envBlip({
+      type: "triangle",
+      freq: 1400,
+      endFreq: 900,
+      duration: 0.045,
+      peak: 0.06,
+      attack: 0.001,
+    });
+  }
+
   pick() {
-    // Soft "page-turn pluck": triangle wave that gently sweeps down.
-    this.envBlip({ type: "triangle", freq: 620, endFreq: 380, duration: 0.12, peak: 0.18 });
-    this.envBlip({ type: "sine", freq: 1240, duration: 0.07, peak: 0.06 });
+    // Very gentle "page lift" — one short soft sine, no high transient.
+    this.envBlip({
+      type: "sine",
+      freq: 480,
+      endFreq: 360,
+      duration: 0.09,
+      peak: 0.07,
+    });
   }
 
   place() {
-    // Wooden "thump" — low sine fundamental + click transient
-    this.envBlip({ type: "sine", freq: 240, endFreq: 110, duration: 0.22, peak: 0.32 });
-    this.envBlip({ type: "sine", freq: 70, duration: 0.25, peak: 0.18 });
-    this.envBlip({ type: "triangle", freq: 1800, endFreq: 600, duration: 0.05, peak: 0.06, attack: 0.001 });
+    // Soft wooden touch — low sine fundamental, no click transient.
+    this.envBlip({
+      type: "sine",
+      freq: 200,
+      endFreq: 120,
+      duration: 0.18,
+      peak: 0.14,
+    });
+    this.envBlip({
+      type: "sine",
+      freq: 90,
+      duration: 0.20,
+      peak: 0.08,
+    });
   }
 
   invalid() {
-    this.envBlip({ type: "sawtooth", freq: 150, endFreq: 95, duration: 0.22, peak: 0.14 });
-    this.envBlip({ type: "square", freq: 90, duration: 0.18, peak: 0.06 });
+    this.envBlip({
+      type: "sawtooth",
+      freq: 150,
+      endFreq: 95,
+      duration: 0.18,
+      peak: 0.10,
+    });
   }
 
   perfect() {
     [880, 1175, 1568].forEach((f, i) => {
       setTimeout(
-        () => this.envBlip({ type: "sine", freq: f, duration: 0.45, peak: 0.18 }),
+        () =>
+          this.envBlip({
+            type: "sine",
+            freq: f,
+            duration: 0.45,
+            peak: 0.15,
+          }),
         i * 70,
       );
     });
   }
 
   win() {
-    [392, 523, 659, 784, 988].forEach((f, i) => {
-      setTimeout(
-        () => this.envBlip({ type: "triangle", freq: f, duration: 0.6, peak: 0.22 }),
-        i * 110,
-      );
+    // Triumphant arpeggio + a sustained chord — duck music briefly.
+    this.duckMusic(2.4);
+    const arp = [392, 523, 659, 784, 988];
+    arp.forEach((f, i) => {
+      setTimeout(() => {
+        this.envBlip({
+          type: "triangle",
+          freq: f,
+          duration: 0.55,
+          peak: 0.32,
+        });
+        this.envBlip({
+          type: "sine",
+          freq: f * 2,
+          duration: 0.55,
+          peak: 0.10,
+        });
+      }, i * 110);
     });
+    // Sustained sparkle chord at the end
+    setTimeout(() => {
+      [523, 659, 988].forEach((f) => {
+        this.envBlip({
+          type: "sine",
+          freq: f,
+          duration: 1.2,
+          peak: 0.16,
+        });
+      });
+    }, arp.length * 110);
   }
 
   lose() {
-    [330, 247, 196, 165].forEach((f, i) => {
-      setTimeout(
-        () => this.envBlip({ type: "sine", freq: f, duration: 0.5, peak: 0.18 }),
-        i * 130,
-      );
+    // Sad, gentle descending figure with a low rumble underneath.
+    this.duckMusic(2.0);
+    const fall = [392, 330, 277, 220];
+    fall.forEach((f, i) => {
+      setTimeout(() => {
+        this.envBlip({
+          type: "triangle",
+          freq: f,
+          duration: 0.5,
+          peak: 0.26,
+        });
+      }, i * 150);
+    });
+    // Low rumble underneath
+    this.envBlip({
+      type: "sine",
+      freq: 80,
+      endFreq: 55,
+      duration: 1.6,
+      peak: 0.18,
     });
   }
 
@@ -153,14 +240,12 @@ class AudioEngine {
     const ctx = this.ensure();
     if (!ctx || !this.master || this.musicNodes.length > 0) return;
 
-    // Music bus
     const musicGain = ctx.createGain();
     musicGain.gain.value = 0.0;
     musicGain.connect(this.master);
     musicGain.gain.linearRampToValueAtTime(0.55, ctx.currentTime + 4);
     this.musicGain = musicGain;
 
-    // A simple synthesized reverb tail (impulse buffer)
     const reverb = ctx.createConvolver();
     reverb.buffer = this.makeImpulse(ctx, 1.8, 2.2);
     const reverbGain = ctx.createGain();
@@ -168,7 +253,6 @@ class AudioEngine {
     reverb.connect(reverbGain).connect(musicGain);
     this.musicReverb = reverb;
 
-    // Drone: cozy A minor — A2, E3, A3, C4
     const droneFreqs = [110, 165, 220, 261.63];
     const droneGains = [0.12, 0.09, 0.07, 0.05];
     droneFreqs.forEach((f, i) => {
@@ -177,14 +261,12 @@ class AudioEngine {
       osc.frequency.value = f;
       const g = ctx.createGain();
       g.gain.value = droneGains[i];
-      // gentle detune to thicken
       osc.detune.value = (i - 1.5) * 4;
       osc.connect(g).connect(musicGain);
       osc.start();
       this.musicNodes.push(osc);
     });
 
-    // Slow LFO breathing on the music bus gain
     const lfo = ctx.createOscillator();
     lfo.type = "sine";
     lfo.frequency.value = 0.07;
@@ -194,7 +276,6 @@ class AudioEngine {
     lfo.start();
     this.musicLfo = lfo;
 
-    // Pluck melody — gentle pentatonic notes at random intervals
     this.scheduleMelody(ctx, musicGain, reverb);
   }
 
@@ -203,7 +284,6 @@ class AudioEngine {
     bus: GainNode,
     reverb: ConvolverNode,
   ) {
-    // A minor pentatonic in two octaves: A C D E G
     const scale = [220, 261.63, 293.66, 329.63, 392, 440, 523.25, 587.33];
     const playOne = () => {
       if (this.musicNodes.length === 0 || !this.enabled) return;
@@ -218,7 +298,6 @@ class AudioEngine {
       g.gain.setValueAtTime(0, now);
       g.gain.linearRampToValueAtTime(peak, now + 0.02);
       g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
-      // A bit of warm low-pass via biquad
       const lp = ctx.createBiquadFilter();
       lp.type = "lowpass";
       lp.frequency.value = 1600;
@@ -231,7 +310,6 @@ class AudioEngine {
       const next = 1500 + Math.random() * 3500;
       this.melodyTimer = window.setTimeout(playOne, next);
     };
-    // First note shortly after fade-in starts
     this.melodyTimer = window.setTimeout(playOne, 1500);
   }
 

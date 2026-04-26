@@ -316,10 +316,18 @@ export default function Game({ levelId }: { levelId: string }) {
     if (!level || state.status !== "playing") return;
     if (state.pending.length === 0) return;
     if (!anyBookFits(level, state.placed, state.pending)) {
-      audio.lose();
       dispatch({ type: "fail", reason: "No remaining space fits any book." });
     }
   }, [level, state.status, state.placed, state.pending]);
+
+  // Centralised win/lose audio cue — fires on any path into those states.
+  useEffect(() => {
+    if (state.status === "won") {
+      audio.win();
+    } else if (state.status === "lost") {
+      audio.lose();
+    }
+  }, [state.status]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -343,7 +351,6 @@ export default function Game({ levelId }: { levelId: string }) {
     if (state.status === "won" && level && !recordedRef.current) {
       recordedRef.current = true;
       const stars = computeStars(level, state.moves, elapsed);
-      audio.win();
       recordLevelResult(
         level.id,
         {
