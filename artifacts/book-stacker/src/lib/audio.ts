@@ -123,6 +123,78 @@ class AudioEngine {
     });
   }
 
+  /** Soft "whoosh" used when a story book opens. */
+  bookOpen() {
+    if (!this.enabled) return;
+    const ctx = this.ensure();
+    if (!ctx || !this.sfxGain) return;
+    // Filtered noise sweep
+    const length = Math.floor(ctx.sampleRate * 0.5);
+    const buf = ctx.createBuffer(1, length, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < length; i++) {
+      const env = Math.sin((i / length) * Math.PI);
+      data[i] = (Math.random() * 2 - 1) * env * 0.7;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.setValueAtTime(400, ctx.currentTime);
+    lp.frequency.exponentialRampToValueAtTime(2400, ctx.currentTime + 0.45);
+    const g = ctx.createGain();
+    g.gain.value = 0.18;
+    src.connect(lp).connect(g).connect(this.sfxGain);
+    src.start();
+    // Soft mid sine to give it warmth
+    this.envBlip({ type: "sine", freq: 240, endFreq: 360, duration: 0.45, peak: 0.10 });
+  }
+
+  /** Short paper-flip rustle used when turning a page. */
+  pageFlip() {
+    if (!this.enabled) return;
+    const ctx = this.ensure();
+    if (!ctx || !this.sfxGain) return;
+    const length = Math.floor(ctx.sampleRate * 0.18);
+    const buf = ctx.createBuffer(1, length, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < length; i++) {
+      const env = Math.pow(1 - i / length, 1.6);
+      data[i] = (Math.random() * 2 - 1) * env * 0.8;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const hp = ctx.createBiquadFilter();
+    hp.type = "highpass";
+    hp.frequency.value = 1800;
+    const g = ctx.createGain();
+    g.gain.value = 0.22;
+    src.connect(hp).connect(g).connect(this.sfxGain);
+    src.start();
+  }
+
+  /** Cheerful chime — used in Kids Mode for a correct answer. */
+  correct() {
+    [659, 784, 988].forEach((f, i) => {
+      setTimeout(
+        () =>
+          this.envBlip({
+            type: "triangle",
+            freq: f,
+            duration: 0.32,
+            peak: 0.20,
+          }),
+        i * 70,
+      );
+    });
+  }
+
+  /** Soft hint sound — used in Kids Mode for a wrong answer. */
+  wrong() {
+    this.envBlip({ type: "sine", freq: 330, endFreq: 247, duration: 0.30, peak: 0.16 });
+    this.envBlip({ type: "sine", freq: 196, duration: 0.20, peak: 0.10 });
+  }
+
   pick() {
     // Very gentle "page lift" — one short soft sine, no high transient.
     this.envBlip({

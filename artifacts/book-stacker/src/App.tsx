@@ -9,6 +9,11 @@ import LevelSelect from "@/pages/LevelSelect";
 import Game from "@/pages/Game";
 import HowToPlay from "@/pages/HowToPlay";
 import Settings from "@/pages/Settings";
+import StoryLibrary from "@/pages/StoryLibrary";
+import StoryReader from "@/pages/StoryReader";
+import Kids from "@/pages/Kids";
+import KidsListen from "@/pages/KidsListen";
+import KidsQuiz from "@/pages/KidsQuiz";
 import { loadProgress } from "@/lib/storage";
 import { audio } from "@/lib/audio";
 
@@ -24,6 +29,13 @@ function Router() {
       </Route>
       <Route path="/how" component={HowToPlay} />
       <Route path="/settings" component={Settings} />
+      <Route path="/library" component={StoryLibrary} />
+      <Route path="/read/:id">
+        {(params) => <StoryReader id={params.id} />}
+      </Route>
+      <Route path="/kids" component={Kids} />
+      <Route path="/kids/listen" component={KidsListen} />
+      <Route path="/kids/quiz" component={KidsQuiz} />
       <Route component={NotFound} />
     </Switch>
   );

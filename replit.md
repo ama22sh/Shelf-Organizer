@@ -44,3 +44,12 @@ Cozy library-themed 2D drag-and-drop puzzle game. Frontend-only (React + Vite, w
 - `CozyRoom` background renders an SVG reading-room scene behind gameplay: warm window with mullions and curtains, flickering floor lamp halo, indoor plant, side table with steaming teacup and a small book stack, plus a vignette.
 - Drag placement uses an offset-aware probe: the floating ghost is centered on the cursor, and `elementsFromPoint` is called at `(cursor - ((W-1)/2, (H-1)/2)*cellSize)` so the ghost's top-left cell index matches the placed position exactly. This eliminates the off-by-one snap for any multi-cell book.
 - Keyboard: `R` rotate, `Esc` restart, `Ctrl/⌘+Z` or `U` undo
+
+## Story Mode + Kids Mode (added)
+- New routes: `/library`, `/read/:id`, `/kids`, `/kids/listen`, `/kids/quiz`
+- Story content in `src/story/stories.ts` — 10 hand-written short stories across 6 categories (adventure, mystery, history, science, fantasy, motivational), 7 daily facts, and a 12-question kids quiz bank. Free vs premium stories; premium unlocked with coins.
+- `pickDaily()` deterministically chooses today's story or fact from a date seed; rendered on Title and Library as "Today's pick" with a +5 coin daily claim button (streak tracked).
+- `src/lib/economy.ts` — separate localStorage namespace `book-stacker-economy-v1` for coins, unlocked stories, story page progress, daily streak, and quiz stats.
+- `StoryReader` shows a 3D-perspective hardcover with a parchment two-page spread, animated page-flip rotateY, drop-cap first letter, page numbers, click zones for paging on mobile, keyboard arrows, and a coin reward on first finish per story.
+- `Kids` is a separate, brighter section with pastel `kids-bg`, large rounded cards, friendly typography. `KidsListen` uses the browser's `window.speechSynthesis` to narrate stories with live word highlighting; `KidsQuiz` is a 5-question fill-in-the-blank round with cheerful/correct hint sounds and a results screen awarding 1 coin per correct.
+- New audio in `audio.ts`: `bookOpen` (filtered noise sweep + warm sine), `pageFlip` (high-passed noise rustle), `correct` (rising triangle arpeggio), `wrong` (gentle descending sine), plus the existing button `click` global hook.
