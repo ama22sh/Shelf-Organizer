@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -19,6 +19,18 @@ import { audio } from "@/lib/audio";
 import { TimeProvider } from "@/lib/TimeContext";
 import { WindowToggle } from "@/components/WindowToggle";
 import { CozyRoom } from "@/components/CozyRoom";
+
+/** Painted background + window toggle — only on the home/title screen. */
+function HomeLayer() {
+  const [location] = useLocation();
+  if (location !== "/") return null;
+  return (
+    <>
+      <CozyRoom />
+      <WindowToggle />
+    </>
+  );
+}
 
 const queryClient = new QueryClient();
 
@@ -103,9 +115,8 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <TimeProvider>
-          <CozyRoom />
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <WindowToggle />
+            <HomeLayer />
             <Router />
           </WouterRouter>
           <Toaster />

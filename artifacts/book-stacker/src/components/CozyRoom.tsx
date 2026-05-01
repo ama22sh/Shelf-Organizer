@@ -33,7 +33,7 @@ export function CozyRoom() {
         src="/day_time.png"
         alt=""
         className="absolute inset-0 w-full h-full object-cover transition-opacity duration-[1200ms] pointer-events-none select-none"
-        style={{ opacity: isNight ? 0 : 1 }}
+        style={{ opacity: isNight ? 0 : 1, objectPosition: "left center" }}
         aria-hidden
         draggable={false}
       />
@@ -41,7 +41,7 @@ export function CozyRoom() {
         src="/night_time.png"
         alt=""
         className="absolute inset-0 w-full h-full object-cover transition-opacity duration-[1200ms] pointer-events-none select-none"
-        style={{ opacity: isNight ? 1 : 0 }}
+        style={{ opacity: isNight ? 1 : 0, objectPosition: "left center" }}
         aria-hidden
         draggable={false}
       />

@@ -573,12 +573,14 @@ export default function Game({ levelId }: { levelId: string }) {
               onBookPointerDown={(bid, e) => startDrag(bid, e, true)}
               cellSize={cellSize}
             />
-            {heldBook && (
-              <div className="text-xs text-muted-foreground italic font-serif mt-2 text-center">
-                Holding "{heldBook.title}" — drag to a shelf, or click a cell
-                {heldBook.rotatable ? " · press R to rotate" : ""}
-              </div>
-            )}
+            <div
+              className="text-xs text-muted-foreground italic font-serif mt-2 text-center"
+              style={{ minHeight: "1.25rem", visibility: heldBook ? "visible" : "hidden" }}
+            >
+              {heldBook
+                ? `Holding "${heldBook.title}" — drag to a shelf, or click a cell${heldBook.rotatable ? " · press R to rotate" : ""}`
+                : "\u00a0"}
+            </div>
           </div>
         </main>
       </div>
