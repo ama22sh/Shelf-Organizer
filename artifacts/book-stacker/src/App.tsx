@@ -16,6 +16,9 @@ import KidsListen from "@/pages/KidsListen";
 import KidsQuiz from "@/pages/KidsQuiz";
 import { loadProgress } from "@/lib/storage";
 import { audio } from "@/lib/audio";
+import { TimeProvider } from "@/lib/TimeContext";
+import { WindowToggle } from "@/components/WindowToggle";
+import { CozyRoom } from "@/components/CozyRoom";
 
 const queryClient = new QueryClient();
 
@@ -76,7 +79,8 @@ function App() {
       // — those have their own dedicated sounds.
       if (
         target.closest('[data-cell="1"]') ||
-        target.closest("[data-book]")
+        target.closest("[data-book]") ||
+        target.closest("[data-no-click-sound]")
       ) {
         return;
       }
@@ -98,10 +102,14 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
+        <TimeProvider>
+          <CozyRoom />
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <WindowToggle />
+            <Router />
+          </WouterRouter>
+          <Toaster />
+        </TimeProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

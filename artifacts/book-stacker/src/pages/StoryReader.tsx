@@ -11,7 +11,6 @@ import {
   setStoryPage,
 } from "@/lib/economy";
 import { audio } from "@/lib/audio";
-import { CozyRoom } from "@/components/CozyRoom";
 
 export default function StoryReader({ id }: { id: string }) {
   const [, setLocation] = useLocation();
@@ -111,7 +110,6 @@ export default function StoryReader({ id }: { id: string }) {
 
   return (
     <div className="min-h-screen relative flex flex-col">
-      <CozyRoom />
 
       <header className="relative z-20 flex items-center justify-between p-4">
         <Link href="/library">

@@ -7,7 +7,7 @@ import { loadEconomy } from "@/lib/economy";
 export default function Kids() {
   const econ = loadEconomy();
   return (
-    <div className="min-h-screen relative kids-bg overflow-hidden">
+    <div className="min-h-screen relative overflow-hidden">
       {/* Cheerful blobs */}
       <div className="absolute -top-20 -left-20 w-96 h-96 rounded-full bg-pink-300/30 blur-3xl pointer-events-none" />
       <div className="absolute -bottom-32 -right-20 w-[28rem] h-[28rem] rounded-full bg-sky-300/30 blur-3xl pointer-events-none" />
@@ -36,10 +36,10 @@ export default function Kids() {
           transition={{ type: "spring", stiffness: 200, damping: 16 }}
           className="text-center mb-10"
         >
-          <h1 className="font-serif text-5xl sm:text-6xl text-amber-900 tracking-tight">
+          <h1 className="font-serif text-5xl sm:text-6xl text-amber-800 drop-shadow-lg tracking-tight">
             Kids Corner
           </h1>
-          <p className="mt-2 text-amber-800 text-lg">
+          <p className="font-serif text-5xl sm:text-3xl text-amber-800 drop-shadow-lg tracking-tight">
             Listen to a story or play a word game!
           </p>
         </motion.div>

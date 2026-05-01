@@ -195,6 +195,71 @@ class AudioEngine {
     this.envBlip({ type: "sine", freq: 196, duration: 0.20, peak: 0.10 });
   }
 
+  /**
+   * Day → night: a dreamy descending arpeggio with a gentle wind whoosh.
+   * Night → day: a bright ascending birdsong-like chime.
+   */
+  timeToggle(toNight: boolean) {
+    if (!this.enabled) return;
+    const ctx = this.ensure();
+    if (!ctx || !this.sfxGain) return;
+
+    if (toNight) {
+      // Wind noise
+      const len = Math.floor(ctx.sampleRate * 1.4);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) {
+        const env =
+          Math.sin((i / len) * Math.PI) * Math.pow(1 - i / len, 0.5);
+        data[i] = (Math.random() * 2 - 1) * env * 0.5;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const lp = ctx.createBiquadFilter();
+      lp.type = "bandpass";
+      lp.frequency.value = 500;
+      lp.Q.value = 0.5;
+      const g = ctx.createGain();
+      g.gain.value = 0.16;
+      src.connect(lp).connect(g).connect(this.sfxGain);
+      src.start();
+      // Descending night arp: E-C-A-F (minor feel)
+      const nightArp = [660, 523, 440, 349];
+      nightArp.forEach((f, i) => {
+        setTimeout(
+          () =>
+            this.envBlip({ type: "triangle", freq: f, duration: 0.55, peak: 0.18 }),
+          i * 130,
+        );
+      });
+      // Low night owl drone
+      setTimeout(
+        () =>
+          this.envBlip({ type: "sine", freq: 110, endFreq: 82, duration: 1.0, peak: 0.10 }),
+        200,
+      );
+    } else {
+      // Ascending day chime: C-E-G-C (bright major)
+      const dayChime = [523, 659, 784, 1047];
+      dayChime.forEach((f, i) => {
+        setTimeout(
+          () =>
+            this.envBlip({ type: "triangle", freq: f, duration: 0.40, peak: 0.18 }),
+          i * 100,
+        );
+      });
+      // Warm sunshine shimmer
+      [1760, 2093].forEach((f, i) => {
+        setTimeout(
+          () =>
+            this.envBlip({ type: "sine", freq: f, duration: 0.28, peak: 0.06 }),
+          i * 80 + 320,
+        );
+      });
+    }
+  }
+
   pick() {
     // Very gentle "page lift" — one short soft sine, no high transient.
     this.envBlip({

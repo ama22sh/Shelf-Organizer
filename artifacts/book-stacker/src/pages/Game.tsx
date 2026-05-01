@@ -14,7 +14,6 @@ import { BookTray } from "@/components/BookTray";
 import { HUD } from "@/components/HUD";
 import { CompleteOverlay } from "@/components/CompleteOverlay";
 import { AmbientDust } from "@/components/AmbientDust";
-import { CozyRoom } from "@/components/CozyRoom";
 import { Book } from "@/components/Book";
 import { getBookDims } from "@/game/gameLogic";
 import { recordLevelResult, loadProgress } from "@/lib/storage";
@@ -489,7 +488,6 @@ export default function Game({ levelId }: { levelId: string }) {
 
   return (
     <div className="min-h-screen flex flex-col relative">
-      <CozyRoom />
       <AmbientDust />
 
       <div className="relative z-10 flex flex-col flex-1">

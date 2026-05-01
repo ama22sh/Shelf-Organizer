@@ -15,7 +15,6 @@ import { loadProgress } from "@/lib/storage";
 import { levels } from "@/game/levels";
 import { loadEconomy } from "@/lib/economy";
 import { pickDaily } from "@/story/stories";
-import { CozyRoom } from "@/components/CozyRoom";
 import { AmbientDust } from "@/components/AmbientDust";
 
 export default function Title() {
@@ -27,7 +26,6 @@ export default function Title() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12 relative">
-      <CozyRoom />
       <AmbientDust />
       <div className="absolute top-4 right-4 z-20 flex items-center gap-1 px-3 py-1.5 rounded-full bg-card/80 backdrop-blur border border-border text-amber-400 text-sm">
         <Coins className="w-4 h-4" />

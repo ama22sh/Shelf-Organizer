@@ -404,6 +404,12 @@
     );
   }
 
+  /* Star twinkle — used by CozyRoom night overlay. */
+  @keyframes twinkle {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 0.85; }
+  }
+
   /* Cheerful pastel background for Kids Mode pages. */
   .kids-bg {
     background:

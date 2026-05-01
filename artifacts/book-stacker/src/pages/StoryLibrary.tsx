@@ -17,7 +17,6 @@ import {
   loadEconomy,
   unlockStory,
 } from "@/lib/economy";
-import { CozyRoom } from "@/components/CozyRoom";
 import { AmbientDust } from "@/components/AmbientDust";
 
 type Filter = "all" | StoryCategory;
@@ -72,7 +71,6 @@ export default function StoryLibrary() {
 
   return (
     <div className="min-h-screen relative">
-      <CozyRoom />
       <AmbientDust />
 
       <div className="relative z-10 max-w-5xl mx-auto p-4 sm:p-6">
